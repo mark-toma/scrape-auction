@@ -22,13 +22,14 @@ MODELS = [
     'fpis',   # FPIS (ford police interceptor sedan)
     'sedan',  # police/interceptor sedan
 ]
+DATA_FILE = 'data.csv'
 
 # https://www.selenium.dev/documentation/webdriver/
 
 class SiteHelper:
     
     WAIT_TIMEOUT = 30 # seconds
-    RESULTS_PER_PAGE = 24
+    RESULTS_PER_PAGE = 120 # Use 24 for development of multipage logic
      
     def __init__(self, site_url):
         self._adv_search_uri = '/advanced-search/'
@@ -137,25 +138,30 @@ class SiteHelper:
         # print('Found %d results' % num_results)
 
         # Find all search URIs
-        time.sleep(2) # dwell until implementing wait
-        page_items = self._driver.find_elements(By.CSS_SELECTOR, '.page-item')
-        page_links = [item.find_element(By.TAG_NAME, 'a') for item in page_items]
-        results_uris = [link.get_dom_attribute('href') for link in page_links]
-        # print('List of results URIs:')
-        # for uri in results_uris:
-        #     print('- %s' % uri) 
+        if num_results > self.RESULTS_PER_PAGE:
+            time.sleep(2) # dwell until implementing wait
+            page_items = self._driver.find_elements(By.CSS_SELECTOR, '.page-item')
+            page_links = [item.find_element(By.TAG_NAME, 'a') for item in page_items]
+            results_urls = [self._site_url + link.get_dom_attribute('href') for link in page_links]
+        else:
+            results_urls = [self._driver.current_url]
         
+        # print('List of results URLs:')
+        # for url in results_urls:
+        #     print('- %s' % url) 
+            
         asset_uris = []       
-        for results_uri in results_uris:
-            site._driver.get(site._site_url + results_uri)
+        for results_url in results_urls:
+            site._driver.get(results_url)
             time.sleep(2)
             # NOTE: The NAME lnkAssetDetails will find two anchors per asset
             # I'm planning to keep this generic locator for future-proofing
             # Just deduplicate the list for uniqueness of asset URIs using a set
             asset_links = site._driver.find_elements(By.NAME, 'lnkAssetDetails')
             asset_uris.extend(list({link.get_dom_attribute('href') for link in asset_links}))
+            # print('asset_uris: %d' % len(asset_uris))
         
-        assert len(asset_uris) == num_results, 'Incorrect number of asset URIs collected'
+        assert len(asset_uris) == num_results, 'Incorrect number of asset URIs collected; results: %d, uris: %d' % (num_results, len(asset_uris))
         # print('Found %d asset URIs' % len(asset_uris))
         # print('List of asset URIs:')
         # for uri in asset_uris:
@@ -242,11 +248,11 @@ if __name__ == '__main__':
     site.reset_advanced_search()
     
     # Build matrix of make/model to search
-    # make_model = site.build_make_model_list(MAKES, MODELS)
-    make_model = [ # Use this for development testing
-        {'make': 'Ford',
-         'model': 'Taurus'},
-    ]
+    make_model = site.build_make_model_list(MAKES, MODELS)
+    # make_model = [ # Use this for development testing
+    #     {'make': 'Ford',
+    #      'model': 'Taurus'},
+    # ]
     
     # Print out make/model combinations
     print('Found the following make/model combinations to search:')
@@ -254,26 +260,25 @@ if __name__ == '__main__':
         print('- %s/%s' % (mm['make'], mm['model']) )
     
     # Build a list of asset URIs for the list of 
-    # asset_uris = []
-    # for mm in make_model:
-    #     asset_uris.extend(site.build_asset_uris_from_make_model(mm))
+    asset_uris = []
+    for mm in make_model:
+        asset_uris.extend(site.build_asset_uris_from_make_model(mm))
         
-    asset_uris = [ # Uncomment for development
-        '/asset/212/96',
-        '/asset/84/25867',
-        '/asset/280/8517',
-        '/asset/15016/7167',
-        '/asset/682/7193',
-        # '/asset/8015/5389',
-        # '/asset/108/6122',
-        # '/asset/15018/7167',
-        # '/asset/684/7193',
-        # '/asset/125/6423',
-    ]
-    
+    # asset_uris = [ # Uncomment for development
+    #     '/asset/212/96',
+    #     '/asset/84/25867',
+    #     '/asset/280/8517',
+    #     '/asset/15016/7167',
+    #     '/asset/682/7193',
+    #     '/asset/8015/5389',
+    #     '/asset/108/6122',
+    #     '/asset/15018/7167',
+    #     '/asset/684/7193',
+    #     '/asset/125/6423',
+    # ]
     
     prev_data = []
-    with open('data.csv', 'r') as csvfile:
+    with open(DATA_FILE, 'r') as csvfile:
         reader = csv.DictReader(csvfile,
                                 quotechar = '"',
                                 quoting = csv.QUOTE_MINIMAL)
@@ -287,6 +292,7 @@ if __name__ == '__main__':
     new_data = []
     for asset_uri in asset_uris:
         # TODO: Skip this asset if already has sufficient data
+        # TBD: Make the suffciency check more sophisticated?
         if asset_uri in prev_asset_uris:
             print('Skipping asset URI \'%s\'' % asset_uri)
             continue        
@@ -315,7 +321,7 @@ if __name__ == '__main__':
             print('Adding key \'%s\' to fieldnames' % k)
             fieldnames.append(k)
     
-    with open('tmp.csv', 'w') as csvfile:
+    with open(DATA_FILE, 'w') as csvfile:
         writer = csv.DictWriter(csvfile,
                                 fieldnames = fieldnames,
                                 quotechar = '"',
