@@ -112,27 +112,21 @@ class SiteHelper:
         # Initialize make reset functionality
         self.reset_make()
         make_model = []
-        make_opts = []
+        make_opts = set()
         for make in makes:
-            make_opts.extend(
-                filter_options_by_text_match(
-                    self.wait_and_get_select_options_by_id('make', timeout = timeout),
-                    make
-                )
-            )
+            tmp = [x.text for x in self.wait_and_get_select_options_by_id('make', timeout = timeout)]
+            make_opts.update(filter_options_by_text_match(tmp, make))
+        make_opts = list(make_opts)
         for make_opt in make_opts:
             self.reset_make()
-            self.select_make(make_opt.text)
-            model_opts = []
+            self.select_make(make_opt)
+            model_opts = set()
             for model in models:
-                model_opts.extend(
-                    filter_options_by_text_match(
-                        self.wait_and_get_select_options_by_id('model', timeout = timeout),
-                        model
-                    )
-                )
+                tmp = [x.text for x in self.wait_and_get_select_options_by_id('model', timeout = timeout)]
+                model_opts.update(filter_options_by_text_match(tmp, model))
+            model_opts = list(model_opts)
             for model_opt in model_opts:
-                make_model.append({'make': make_opt.text, 'model': model_opt.text})
+                make_model.append({'make': make_opt, 'model': model_opt})
         return make_model
     
     def select_results_per_page(self, num_results_per_page: int = 120, timeout = WAIT_TIMEOUT):
@@ -181,6 +175,7 @@ class SiteHelper:
         # print('List of asset URIs:')
         # for uri in asset_uris:
         #     print('- %s' % uri)
+        print('Found %d new assets for make/model: %s %s' % (num_results, make_model['make'], make_model['model']))
         return asset_uris
 
     def get_data_from_asset_uri(self, asset_uri):
@@ -247,14 +242,14 @@ class SiteHelper:
         return data
     
         
-def filter_options_by_text_match(options: List[WebElement], text: str, strategy: str = 'contains') -> List[WebElement]:
+def filter_options_by_text_match(options: List[str], text: str, strategy: str = 'contains') -> List[WebElement]:
     match strategy:
         case 'contains':
-            return [opt for opt in options if text.lower() in opt.text.lower()]
+            return [opt for opt in options if text.lower() in opt.lower()]
         case 'startswith':
-            return [opt for opt in options if opt.text.lower().startswith(text.lower())]
+            return [opt for opt in options if opt.lower().startswith(text.lower())]
         case 'equals':
-            return [opt for opt in options if opt.text.lower() == text.lower()]
+            return [opt for opt in options if opt.lower() == text.lower()]
 
 if __name__ == '__main__':
     
@@ -274,24 +269,14 @@ if __name__ == '__main__':
     for mm in make_model:
         print('- %s/%s' % (mm['make'], mm['model']) )
     
-    # Build a list of asset URIs for the list of 
-    asset_uris = []
+    # Build a list of asset URIs for the list of makes/models
+    asset_uris = set()
     for mm in make_model:
-        asset_uris.extend(site.build_asset_uris_from_make_model(mm))
-        
-    # asset_uris = [ # Uncomment for development
-    #     '/asset/212/96',
-    #     '/asset/84/25867',
-    #     '/asset/280/8517',
-    #     '/asset/15016/7167',
-    #     '/asset/682/7193',
-    #     '/asset/8015/5389',
-    #     '/asset/108/6122',
-    #     '/asset/15018/7167',
-    #     '/asset/684/7193',
-    #     '/asset/125/6423',
-    # ]
+        asset_uris.update(site.build_asset_uris_from_make_model(mm))
+    asset_uris = list(asset_uris)
+    print("Total number of URIs found: %d" % len(asset_uris))
     
+    # Load previous data and make list of URIs
     prev_data = []
     with open(DATA_FILE, 'r') as csvfile:
         reader = csv.DictReader(csvfile,
@@ -299,23 +284,18 @@ if __name__ == '__main__':
                                 quoting = csv.QUOTE_MINIMAL)
         for row in reader:
             prev_data.append(row)
-
     prev_asset_uris = []
     for el in prev_data:
         prev_asset_uris.append(el['ASSET_URI'])
 
+    # Filter out new URIs that are exclusive of previous URIs
+    asset_uris = list(set(asset_uris) - set(prev_asset_uris))
+    print('Exclusive URIs to be updated: %d' % len(asset_uris))
+
     new_data = []
     for asset_uri in asset_uris:
-        # TODO: Skip this asset if already has sufficient data
-        # TBD: Make the suffciency check more sophisticated?
-        if asset_uri in prev_asset_uris:
-            print('Skipping asset URI \'%s\'' % asset_uri)
-            continue        
-        else:
-            print('Appending data for asset URI \'%s\'' % asset_uri)
+        print('Appending data for asset URI \'%s\'' % asset_uri)
         new_data.append(site.get_data_from_asset_uri(asset_uri))
-        
-        # TODO: Store/update asset data
 
     data = prev_data + new_data
     
