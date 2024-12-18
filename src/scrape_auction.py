@@ -30,8 +30,10 @@ class SiteHelper:
     
     WAIT_TIMEOUT = 30 # seconds
     RESULTS_PER_PAGE = 120 # Use 24 for development of multipage logic
-     
+    RESET_MAKE_TEXT = 'Select Make'
+    
     def __init__(self, site_url):
+        self._max_models = None # Number of models when "Select Make" is selected as make select option
         self._adv_search_uri = '/advanced-search/'
         self._site_url = site_url
         self._driver = webdriver.Chrome()
@@ -74,45 +76,58 @@ class SiteHelper:
         # TODO: Wait for page to load
     
     def advanced_search(self, make_model):
-        site.reset_make()
-        site.select_make(make_model['make'])
-        site.select_model(make_model['model'])
+        self.reset_make()
+        self.select_make(make_model['make'])
+        self.select_model(make_model['model'])
         self.wait_and_click_by_id('btnAdvancedSearch')
         # TODO: Wait for page to load
    
     def reset_make(self, timeout = WAIT_TIMEOUT):
-        is_no_model = lambda d : len(Select(d.find_element(By.ID, 'model')).options) == 1
-        wait = WebDriverWait(self._driver, timeout = timeout)
-        site.wait_and_select_option_by_id('make', '-')
-        wait.until(is_no_model)
+        self.wait_and_select_option_by_id('make', self.RESET_MAKE_TEXT)
+        if self._max_models is None:
+            print('First call to method reset_make() is dwelling to allow models options to load')
+            time.sleep(5) # Dwell to let the models items update
+            model_opts = self.wait_and_get_select_options_by_id('model', timeout = timeout)
+            self._max_models = len(model_opts)
+            print('Initialized member _max_models to %d' % self._max_models)
+        else:
+            is_max_models = lambda d : len(Select(d.find_element(By.ID, 'model')).options) == self._max_models
+            wait = WebDriverWait(self._driver, timeout = timeout)
+            wait.until(is_max_models)
         
     def select_make(self, make: str, timeout = WAIT_TIMEOUT):
-        is_some_model = lambda d : len(Select(d.find_element(By.ID, 'model')).options) > 1
-        wait = WebDriverWait(self._driver, timeout = timeout)
-        site.wait_and_select_option_by_id('make', make, timeout = timeout)
-        wait.until(is_some_model)
+        self.wait_and_select_option_by_id('make', make, timeout = timeout)
+        if self._max_models is None:
+            print('Selected make without first initializing member _max_models; You should call reset_make() first!')
+            time.sleep(5)
+        else:
+            is_not_max_models = lambda d : len(Select(d.find_element(By.ID, 'model')).options) != self._max_models
+            wait = WebDriverWait(self._driver, timeout = timeout)
+            wait.until(is_not_max_models)
         
     def select_model(self, model, timeout = WAIT_TIMEOUT):
-        site.wait_and_select_option_by_id('model', model, timeout = timeout)
+        self.wait_and_select_option_by_id('model', model, timeout = timeout)
 
     def build_make_model_list(self, makes: List[str], models: List[str], timeout = WAIT_TIMEOUT) -> List[Dict]:
-        make_model = [] 
+        # Initialize make reset functionality
+        self.reset_make()
+        make_model = []
         make_opts = []
         for make in makes:
             make_opts.extend(
                 filter_options_by_text_match(
-                    site.wait_and_get_select_options_by_id('make', timeout = timeout),
+                    self.wait_and_get_select_options_by_id('make', timeout = timeout),
                     make
                 )
             )
         for make_opt in make_opts:
-            site.reset_make()
-            site.select_make(make_opt.text)
+            self.reset_make()
+            self.select_make(make_opt.text)
             model_opts = []
             for model in models:
                 model_opts.extend(
                     filter_options_by_text_match(
-                        site.wait_and_get_select_options_by_id('model', timeout = timeout),
+                        self.wait_and_get_select_options_by_id('model', timeout = timeout),
                         model
                     )
                 )
@@ -122,7 +137,7 @@ class SiteHelper:
     
     def select_results_per_page(self, num_results_per_page: int = 120, timeout = WAIT_TIMEOUT):
         option = '%d per page' % num_results_per_page
-        site.wait_and_select_option_by_id('selectDisplayRows', option, timeout = timeout)
+        self.wait_and_select_option_by_id('selectDisplayRows', option, timeout = timeout)
     
     def build_asset_uris_from_make_model(self, make_model, timeout = WAIT_TIMEOUT):
         self.reset_advanced_search()
@@ -152,12 +167,12 @@ class SiteHelper:
             
         asset_uris = []       
         for results_url in results_urls:
-            site._driver.get(results_url)
+            self._driver.get(results_url)
             time.sleep(2)
             # NOTE: The NAME lnkAssetDetails will find two anchors per asset
             # I'm planning to keep this generic locator for future-proofing
             # Just deduplicate the list for uniqueness of asset URIs using a set
-            asset_links = site._driver.find_elements(By.NAME, 'lnkAssetDetails')
+            asset_links = self._driver.find_elements(By.NAME, 'lnkAssetDetails')
             asset_uris.extend(list({link.get_dom_attribute('href') for link in asset_links}))
             # print('asset_uris: %d' % len(asset_uris))
         
@@ -169,7 +184,7 @@ class SiteHelper:
         return asset_uris
 
     def get_data_from_asset_uri(self, asset_uri):
-        site._driver.get(site._site_url + asset_uri)
+        self._driver.get(self._site_url + asset_uri)
         time.sleep(2)
        
         data = {}
