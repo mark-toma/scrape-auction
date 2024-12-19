@@ -175,7 +175,7 @@ class SiteHelper:
         # print('List of asset URIs:')
         # for uri in asset_uris:
         #     print('- %s' % uri)
-        print('Found %d new assets for make/model: %s %s' % (num_results, make_model['make'], make_model['model']))
+        print('Found %d assets for make/model: %s %s' % (num_results, make_model['make'], make_model['model']))
         return asset_uris
 
     def get_data_from_asset_uri(self, asset_uri):
