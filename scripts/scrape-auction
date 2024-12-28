@@ -1,0 +1,5 @@
+#!/bin/bash
+
+cd "$(dirname "$0")/.."
+
+./src/scrape_auction.py "$@" | tee -a out.log

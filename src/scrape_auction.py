@@ -1,9 +1,12 @@
-#!/bin/python3
+#!/usr/bin/env python
+
+import os
 import time
 from typing import List, Dict
 from datetime import datetime as DT
 import pytz
 from pyvirtualdisplay import Display
+import argparse
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -15,14 +18,6 @@ from selenium.webdriver.remote.webelement import WebElement
 import csv
 
 SITE_URL = 'http://govdeals.com'
-MAKES = [
-    'ford', # Ford | FORD
-]
-MODELS = [
-    'taurus', # Taurus | Interceptor Taurus | Police Taurus
-    'fpis',   # FPIS (ford police interceptor sedan)
-    'sedan',  # police/interceptor sedan
-]
 DATA_FILE = 'data.csv'
 
 # https://www.selenium.dev/documentation/webdriver/
@@ -252,82 +247,119 @@ def filter_options_by_text_match(options: List[str], text: str, strategy: str = 
         case 'equals':
             return [opt for opt in options if opt.lower() == text.lower()]
 
-if __name__ == '__main__':
+def run(args):
     
-    with Display():
-        
-        # Initialize site to advanced search page
-        site = SiteHelper(SITE_URL)
-        site.reset_advanced_search()
-        
-        # Build matrix of make/model to search
-        make_model = site.build_make_model_list(MAKES, MODELS)
-        # make_model = [ # Use this for development testing
-        #     {'make': 'Ford',
-        #      'model': 'Taurus'},
-        # ]
-        
-        # Print out make/model combinations
-        print('Found the following make/model combinations to search:')
-        for mm in make_model:
-            print('- %s/%s' % (mm['make'], mm['model']) )
-        
-        # Build a list of asset URIs for the list of makes/models
-        asset_uris = set()
-        for mm in make_model:
-            asset_uris.update(site.build_asset_uris_from_make_model(mm))
-        asset_uris = list(asset_uris)
-        print("Total number of URIs found: %d" % len(asset_uris))
-        
-        # Load previous data and make list of URIs
-        prev_data = []
-        with open(DATA_FILE, 'r') as csvfile:
+    # Initialize site to advanced search page
+    site = SiteHelper(SITE_URL)
+    site.reset_advanced_search()
+    
+    # Build matrix of make/model to search
+    make_model = site.build_make_model_list(args.makes, args.models)
+    # make_model = [ # Use this for development testing
+    #     {'make': 'Ford',
+    #      'model': 'Taurus'},
+    # ]
+    
+    # Print out make/model combinations
+    print('Found the following make/model combinations to search:')
+    for mm in make_model:
+        print('- %s/%s' % (mm['make'], mm['model']) )
+    
+    # Build a list of asset URIs for the list of makes/models
+    asset_uris = set()
+    for mm in make_model:
+        asset_uris.update(site.build_asset_uris_from_make_model(mm))
+    asset_uris = list(asset_uris)
+    print("Total number of URIs found: %d" % len(asset_uris))
+    
+    # Load previous data and make list of URIs
+    prev_data = []
+    prev_asset_uris = []
+    fieldnames = []
+    if args.infile != None:
+        with open(args.infile, 'r') as csvfile:
             reader = csv.DictReader(csvfile,
                                     quotechar = '"',
                                     quoting = csv.QUOTE_MINIMAL)
             for row in reader:
                 prev_data.append(row)
-        prev_asset_uris = []
         for el in prev_data:
             prev_asset_uris.append(el['ASSET_URI'])
-
-        # Filter out new URIs that are exclusive of previous URIs
-        asset_uris = list(set(asset_uris) - set(prev_asset_uris))
-        print('Exclusive URIs to be updated: %d' % len(asset_uris))
-
-        new_data = []
-        for asset_uri in asset_uris:
-            print('Appending data for asset URI \'%s\'' % asset_uri)
-            new_data.append(site.get_data_from_asset_uri(asset_uri))
-
-        data = prev_data + new_data
-        
-        # Remap list of dict into dict of list
-        # out = {}
-        # for el in data:
-        #     for k, v in el.items():
-        #         if k not in out.keys():
-        #             out[k] = []
-        #         out[k].append(v)
-        # print(out)
         fieldnames = list(prev_data[0].keys())
-        new_keys = set()
-        for el in new_data:
-            new_keys.update(el.keys())
-        for k in new_keys:
-            if k not in fieldnames:
-                print('Adding key \'%s\' to fieldnames' % k)
-                fieldnames.append(k)
-        
-        with open(DATA_FILE, 'w') as csvfile:
-            writer = csv.DictWriter(csvfile,
-                                    fieldnames = fieldnames,
-                                    quotechar = '"',
-                                    quoting = csv.QUOTE_MINIMAL)
-            writer.writeheader()
-            writer.writerows(data)
-        
-        
-        time.sleep(10)
-        
-        site.quit()
+
+    # Filter out new URIs that are exclusive of previous URIs
+    asset_uris = list(set(asset_uris) - set(prev_asset_uris))
+    print('Exclusive URIs to be updated: %d' % len(asset_uris))
+
+    # Get all the new data then close the site
+    new_data = []
+    for asset_uri in asset_uris:
+        print('Appending data for asset URI \'%s\'' % asset_uri)
+        new_data.append(site.get_data_from_asset_uri(asset_uri))
+    site.quit()
+
+    # Post process the data    
+    data = prev_data + new_data
+    # TODO: Should probably sort these
+    
+    # Append new keys to fieldnames for output file
+    new_keys = set()
+    for el in new_data:
+        new_keys.update(el.keys())
+    for k in new_keys:
+        if k not in fieldnames:
+            print('Adding key \'%s\' to fieldnames' % k)
+            fieldnames.append(k)
+    # Force default fieldname order for initial columns
+    headfields = ['SITE_URL', 'ASSET_URI', 'CURRENT_BID', 'CLOSING_DATE_UTC', 'VIN/SERIAL', 'YEAR', 'MAKE/BRAND', 'MODEL']
+    for hf in headfields:
+        if hf in fieldnames:
+            fieldnames.remove(hf)
+    fieldnames = headfields + fieldnames
+    
+    # Write the output file
+    with open(args.outfile, 'w') as csvfile:
+        writer = csv.DictWriter(csvfile,
+                                fieldnames = fieldnames,
+                                quotechar = '"',
+                                quoting = csv.QUOTE_MINIMAL)
+        writer.writeheader()
+        writer.writerows(data)
+
+if __name__ == '__main__':
+    
+    parser = argparse.ArgumentParser(
+        prog = 'Scrape Auction',
+        description = 'Fetch auction listing details'
+    )
+    parser.add_argument('-n', '--no-gui', action = 'store_true',
+                        help = 'When set, run in headless mode using XVFB')   
+    parser.add_argument('-i', '--infile', action = 'store',
+                        help = 'Input data file containing previous results')
+    parser.add_argument('-o', '--outfile', action = 'store', default = DATA_FILE,
+                        help = 'Output data file to contain all results')
+    
+    parser.add_argument('--makes', action = 'store', nargs = '+',
+                    help = 'Make(s) to be searched')
+    parser.add_argument('--models', action = 'store', nargs = '+',
+                    help = 'Model(s) to be searched')
+    
+    args = parser.parse_args()
+    print(args)
+    
+    # Validate arguments
+    if args.infile:
+        # Infile must exist
+        assert os.path.isfile(args.infile),\
+        'Input file \'%s\' does not exist' % args.infile
+    if args.outfile != args.infile:
+        # Don't overwrite outfile
+        assert not os.path.isfile(args.outfile),\
+        'Output file \'%s\' exists and is not specified to be used as input' % args.outfile
+    
+    # Run with or without headless args
+    if args.no_gui:
+        with Display():    
+            run(args)
+    else:
+        run(args)
