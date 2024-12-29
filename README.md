@@ -93,16 +93,23 @@ specific vehicles of interest. This section documents these for each model and a
 
 ## Ford Police Interceptor Sedan (Taurus)
 
-- Powertrain code `P2MT`
+- Powertrain code `P2MT` in digits 5-8
   - AWD with 3.5 turbocharged engine
-  - Code: `'p2mt' in vin.lower()`
+  - Code: `'p2mt' == vin.lower()[4-7]`
 
-## Dodge Police Pursuit Interceptor (Charger)
+## Dodge Police Pursuit Vehicle (Charger)
 
-- TODO
+- Vehicle code `CDXKT` in digits 4-8
   - AWD with 5.7 hemi engine
+  - Code: `'cdxkt' == vin.lower()[3-7]`
 
 ## Ford Escape
 
 - TODO
   - AWD with 2.0 turbocharged engine
+
+## TODO:
+
+https://www.reddit.com/r/MechanicAdvice/comments/qkl53z/how_to_tell_if_a_vehicle_is_equipped_with_police/?captcha=1
+
+Consider adding the fusion to the search list based on enginer availability?
