@@ -71,4 +71,38 @@ Add the flag `-n` or `--no-gui` to run in headless mode.
 scrape-auction --no-gui --infile ford-taurus.csv --outfile ford-taurus.csv --makes ford --models taurus fpis sedan
 ```
 
+## Example `crontab` definitions
 
+This example uses `bash` with non-interactive `~/.bash_profile` to find `scrape-auction` and then
+uses the `logger` utility to catch all output so that cron doesn't have issues with unhandled
+output and lack of configured MTA on the system.
+
+```shell
+SHELL=/bin/bash
+BASH_ENV=~/.bash_profile
+0   3 * * * scrape-auction -n -i ford-taurus.csv   -o ford-taurus.csv   --makes ford  --models taurus fpis sedan   | logger -t scrape-auction
+30  3 * * * scrape-auction -n -i dodge-charger.csv -o dodge-charger.csv --makes dodge --models charger interceptor | logger -t scrape-auction
+0   4 * * * scrape-auction -n -i ford-escape.csv   -o ford-escape.csv   --makes ford  --models escape              | logger -t scrape-auction
+30  4 * * * scrape-auction -n -i ford-focus.csv    -o ford-focus.csv    --makes ford  --models focus               | logger -t scrape-auction
+```
+
+# Interpreting data
+
+The primary expected interaction with this data is to search the VIN for substrings identifying
+specific vehicles of interest. This section documents these for each model and associated characteristics.
+
+## Ford Police Interceptor Sedan (Taurus)
+
+- Powertrain code `P2MT`
+  - AWD with 3.5 turbocharged engine
+  - Code: `'p2mt' in vin.lower()`
+
+## Dodge Police Pursuit Interceptor (Charger)
+
+- TODO
+  - AWD with 5.7 hemi engine
+
+## Ford Escape
+
+- TODO
+  - AWD with 2.0 turbocharged engine

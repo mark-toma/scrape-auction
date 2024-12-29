@@ -343,8 +343,8 @@ if __name__ == '__main__':
                     help = 'Make(s) to be searched')
     parser.add_argument('--models', action = 'store', nargs = '+',
                     help = 'Model(s) to be searched')
-    
     args = parser.parse_args()
+    print('Scrape Auction script called with the following arguments:')
     print(args)
     
     # Validate arguments

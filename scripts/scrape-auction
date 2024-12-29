@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Change to repo root directory
 cd "$(dirname "$0")/.."
 
-./src/scrape_auction.py "$@" | tee -a out.log
+# Call script with command line args and ...
+# - Redirection of stderr to stdout
+# - Tee to out.log and stdout
+# NOTE: Callers may wish to redirect stdout to /dev/null
+./src/scrape_auction.py "$@" 2>&1 | tee -a out.log
