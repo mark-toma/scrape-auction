@@ -197,7 +197,6 @@ class SiteHelper:
             .find_element(By.CSS_SELECTOR, 'p span span')\
             .text.strip()[1:-1] # Remove parenthesis
         # => 'Dec 18, 2024 07:45 AM MST'
-        closing_date_string = 'Dec 18, 2024 07:45 AM MST'
         format_string = "%b %d, %Y %I:%M %p %Z"
         # Convert to UTC
         tz_string = closing_date_string.split()[-1]
